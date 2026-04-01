@@ -1,0 +1,27 @@
+name: Update Dependabot
+
+on:
+  schedule:
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-dependabot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./update-dependabot
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: 'Update .github/dependabot.yml'
+          title: 'Update .github/dependabot.yml'
+          body: Updates `.github/dependabot.yml` to reflect the current set of supported branches.
+          branch: update-dependabot
+          delete-branch: true
+          labels: |
+            type: task
+            in: build

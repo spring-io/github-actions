@@ -27,3 +27,87 @@ jobs:
       security-events: write
     uses: spring-io/github-actions/.github/workflows/codeql-analysis.yml@1
 ----
+
+== update-dependabot
+
+Renders a https://mustache.github.io[Mustache] template at `.github/specs/dependabot.spec.yml` into `.github/dependabot.yml`, populated with the active supported branches from the https://api.spring.io[Spring project generations API] and the corresponding open GitHub milestones.
+
+The action is designed to be paired with `peter-evans/create-pull-request` so that a weekly scheduled workflow proposes the updated file as a pull request whenever the rendered output changes.
+
+=== Template (`dependabot.spec.yml`)
+
+Write `.github/specs/dependabot.spec.yml` as a standard Dependabot configuration file with Mustache section tags controlling which branch entries are emitted.
+
+Available context variables:
+
+* `{{#feature-branches}}` — iterates over all currently active feature branches (OSS: within OSS support window; commercial: within commercial-only window). Each entry exposes `{{branch}}` and, when a matching open milestone exists, `{{milestone}}`.
+* `{{#main}}` — renders a single entry for the `main` branch (OSS projects only). Exposes `{{branch}}` and `{{milestone}}` when resolved.
+* `{{#docs-build}}` — renders a single entry for the `docs-build` branch.
+
+Available built-in partials:
+
+* `{{>target-branch}}` — expands to `target-branch: <branch>`
+* `{{>directory}}` — expands to `directory: /`
+* `{{>schedule}}` — expands to a weekly schedule block
+* `{{>labels}}` — expands to the standard `in: build` / `type: dependency-upgrade` labels block
+
+This project's own link:.github/specs/dependabot.spec.yml[`.github/specs/dependabot.spec.yml`] is a working sample.
+
+=== Workflow
+
+A typical weekly workflow looks like this.
+This project's own link:.github/workflows/update-dependabot.yml[`.github/workflows/update-dependabot.yml`] is a working sample.
+
+.github/workflows/update-dependabot.yml
+[source,yaml]
+----
+name: Update Dependabot
+
+on:
+  schedule:
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-dependabot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: spring-io/github-actions/update-dependabot@1
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: 'Update .github/dependabot.yml'
+          title: 'Update .github/dependabot.yml'
+          body: Updates `.github/dependabot.yml` to reflect the current set of supported branches.
+          branch: update-dependabot
+          delete-branch: true
+          labels: |
+            type: task
+            in: build
+----
+
+=== Inputs
+
+|===
+|Input |Required |Default |Description
+
+|`token`
+|No
+|`github.token`
+|GitHub token used for milestone API calls.
+
+|`project-slug`
+|No
+|Repository name with any `-commercial` suffix stripped
+|Spring project slug passed to the generations API (e.g. `spring-security`).
+
+|`project-type`
+|No
+|`commercial` if the repo name ends in `-commercial`, otherwise `oss`
+|Whether to select OSS or commercial active generations.
+
+|===

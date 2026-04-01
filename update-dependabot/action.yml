@@ -1,0 +1,23 @@
+name: 'Update Dependabot'
+description: 'Renders .github/specs/dependabot.spec.yml (Mustache) to .github/dependabot.yml using Spring API branch and GitHub milestone data'
+author: 'spring-io'
+
+inputs:
+  token:
+    description: 'GitHub token for API calls'
+    required: false
+    default: ${{ github.token }}
+  project-slug:
+    description: >
+      Spring project slug for the generations API (e.g. spring-security).
+      Defaults to the repository name with any -commercial suffix stripped.
+    required: false
+  project-type:
+    description: >
+      Whether this is an oss or commercial project.
+      Defaults to commercial if the repository name ends in -commercial, otherwise oss.
+    required: false
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'

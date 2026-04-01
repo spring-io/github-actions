@@ -1,0 +1,13 @@
+#!/bin/sh
+if git diff --cached --name-only | grep -q '^update-dependabot/src/'; then
+    echo "update-dependabot/src/ changed — rebuilding dist/..."
+    (cd update-dependabot && npm run build --silent)
+    if ! git diff --quiet update-dependabot/dist/; then
+        echo ""
+        echo "ERROR: update-dependabot/dist/ is out of date. Stage the rebuilt files and commit again:"
+        echo ""
+        git diff --name-only update-dependabot/dist/ | sed 's/^/  git add /'
+        echo ""
+        exit 1
+    fi
+fi
