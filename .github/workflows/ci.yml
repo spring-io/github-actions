@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  update-dependabot:
+    name: update-dependabot
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: update-dependabot
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          # Matches the runtime declared in update-dependabot/action.yml
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: update-dependabot/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Test
+        run: npm test
