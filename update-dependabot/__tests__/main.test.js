@@ -127,8 +127,19 @@ describe('findMainGeneration', () => {
     expect(findMainGeneration(GENERATIONS, ['6.5.x', '7.0.x'])).toBe('7.1.x')
   })
 
-  it('returns the correct candidate when the highest version IS a feature branch', () => {
-    expect(findMainGeneration(GENERATIONS, ['6.5.x', '7.0.x', '7.1.x'])).toBe('6.4.x')
+  it('returns null when the highest known generation IS a feature branch, rather than falling back to an older retired one', () => {
+    // 7.1.x is the newest generation the API knows about, but it's already a feature
+    // branch — main must be tracking something newer still (e.g. 7.2.x) that hasn't
+    // been registered yet. 6.4.x is older than 7.1.x and must not be picked instead.
+    expect(findMainGeneration(GENERATIONS, ['6.5.x', '7.0.x', '7.1.x'])).toBeNull()
+  })
+
+  it('does not pick a retired generation that is older than the newest active feature branch', () => {
+    // 6.3.x has fallen out of the active feature-branch set (its OSS support window
+    // ended) but is older than 7.0.x, the newest active feature branch — it must not
+    // be mistaken for the generation main tracks just because it isn't a feature branch.
+    expect(findMainGeneration(GENERATIONS, ['6.5.x', '7.0.x'])).toBe('7.1.x')
+    expect(findMainGeneration(GENERATIONS.filter(g => g.name !== '7.1.x'), ['6.5.x', '7.0.x'])).toBeNull()
   })
 
   it('returns null when generations is empty', () => {
@@ -302,6 +313,24 @@ describe('resolveMainMilestone', () => {
       GENERATIONS, ['6.5.x', '7.0.x'], [], '/workspace'
     )
     expect(result).toBeUndefined()
+  })
+
+  it('resolves end-to-end when the generation main tracks is not yet registered in the API', async () => {
+    // 7.1.x, the newest generation the API knows about, is already a feature branch, so
+    // findMainGeneration returns null and this falls through to build files. gradle.properties
+    // declares 7.2.0-SNAPSHOT → 7.2.x → #125, which is present alongside an unrelated open
+    // milestone (#79) that's still sitting on GitHub from a retired generation.
+    jest.spyOn(fs, 'existsSync').mockImplementation(p => p.endsWith('gradle.properties'))
+    jest.spyOn(fs, 'readFileSync').mockReturnValue('version=7.2.0-SNAPSHOT\n')
+    const openMilestones = [
+      { title: '6.3.x', number: 79 },
+      { title: '7.2.x', number: 125 },
+    ]
+
+    const result = await resolveMainMilestone(
+      GENERATIONS, ['6.5.x', '7.0.x', '7.1.x'], openMilestones, '/workspace'
+    )
+    expect(result).toBe(125)
   })
 })
 
