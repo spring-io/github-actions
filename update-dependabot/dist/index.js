@@ -30858,13 +30858,25 @@ function attachMilestone(entry, num) {
   return entry
 }
 
-// Sorts all generations descending by version and returns the name of the first
-// that is not already an active feature branch — this is the generation main tracks.
+// Finds the generation that immediately follows the newest feature branch — this is
+// the generation main tracks. Falls back to the highest-versioned generation when
+// there are no feature branches at all.
 function findMainGeneration(generations, featureBranchNames) {
   const featureSet = new Set(featureBranchNames)
-  return [...generations]
-    .sort((a, b) => b.name.localeCompare(a.name, undefined, { numeric: true }))
-    .find(g => !featureSet.has(g.name))
+  const newestFeatureBranch = [...featureBranchNames]
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    .pop()
+  const candidates = generations.filter(g => !featureSet.has(g.name))
+
+  if (newestFeatureBranch === undefined) {
+    return [...candidates]
+      .sort((a, b) => b.name.localeCompare(a.name, undefined, { numeric: true }))[0]
+      ?.name ?? null
+  }
+
+  return candidates
+    .filter(g => g.name.localeCompare(newestFeatureBranch, undefined, { numeric: true }) > 0)
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))[0]
     ?.name ?? null
 }
 

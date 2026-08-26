@@ -383,6 +383,11 @@ describe('run', () => {
   let tmpDir
 
   beforeEach(() => {
+    // Pin the clock so run()'s new Date() matches the fixtures' support windows,
+    // keeping the active-generation set deterministic regardless of when tests run.
+    jest.useFakeTimers()
+    jest.setSystemTime(TODAY)
+
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'update-dependabot-test-'))
     fs.mkdirSync(path.join(tmpDir, '.github', 'specs'), { recursive: true })
     fs.writeFileSync(path.join(tmpDir, '.github', 'specs', 'dependabot.spec.yml'), SPEC_TEMPLATE)
@@ -399,6 +404,7 @@ describe('run', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true })
     delete process.env.GITHUB_WORKSPACE
     jest.clearAllMocks()
+    jest.useRealTimers()
   })
 
   it('renders feature branches and main for an OSS project', async () => {
@@ -517,6 +523,11 @@ describe('run — {{>milestone}} partial', () => {
   let tmpDir
 
   beforeEach(() => {
+    // Pin the clock so run()'s new Date() matches the fixtures' support windows,
+    // keeping the active-generation set deterministic regardless of when tests run.
+    jest.useFakeTimers()
+    jest.setSystemTime(TODAY)
+
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'update-dependabot-test-'))
     fs.mkdirSync(path.join(tmpDir, '.github', 'specs'), { recursive: true })
     fs.writeFileSync(
@@ -540,6 +551,7 @@ describe('run — {{>milestone}} partial', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true })
     delete process.env.GITHUB_WORKSPACE
     jest.clearAllMocks()
+    jest.useRealTimers()
   })
 
   it('renders "milestone: <number> # <branch>" when a matching milestone exists', async () => {
