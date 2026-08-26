@@ -15,6 +15,7 @@ const {
   fetchGenerations,
   isActiveGeneration,
   findMilestoneNumber,
+  attachMilestone,
   findMainGeneration,
   readProjectVersion,
   toVersionBranch,
@@ -166,6 +167,24 @@ describe('findMilestoneNumber', () => {
 
   it('returns undefined for an empty milestone list', () => {
     expect(findMilestoneNumber([], '6.5.x')).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// attachMilestone
+// ---------------------------------------------------------------------------
+
+describe('attachMilestone', () => {
+  it('sets .milestone and returns it from .requiredMilestone() when found', () => {
+    const entry = attachMilestone({ branch: '6.5.x' }, 10)
+    expect(entry.milestone).toBe(10)
+    expect(entry.requiredMilestone()).toBe(10)
+  })
+
+  it('omits .milestone and throws from .requiredMilestone() when not found', () => {
+    const entry = attachMilestone({ branch: '7.0.x' }, undefined)
+    expect(entry.milestone).toBeUndefined()
+    expect(() => entry.requiredMilestone()).toThrow(/7\.0\.x/)
   })
 })
 
@@ -448,5 +467,77 @@ describe('run', () => {
     expect(core.setFailed).toHaveBeenCalledWith(
       expect.stringContaining('Spec template not found')
     )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// run() — {{>milestone}} partial
+// ---------------------------------------------------------------------------
+
+const MILESTONE_PARTIAL_SPEC_TEMPLATE = `\
+version: 2
+updates:
+{{#feature-branches}}
+  - package-ecosystem: gradle
+    {{>target-branch}}
+    {{>milestone}}
+{{/feature-branches}}
+`
+
+describe('run — {{>milestone}} partial', () => {
+  let tmpDir
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'update-dependabot-test-'))
+    fs.mkdirSync(path.join(tmpDir, '.github', 'specs'), { recursive: true })
+    fs.writeFileSync(
+      path.join(tmpDir, '.github', 'specs', 'dependabot.spec.yml'),
+      MILESTONE_PARTIAL_SPEC_TEMPLATE
+    )
+
+    process.env.GITHUB_WORKSPACE = tmpDir
+    github.context.repo.owner = 'spring-projects'
+    github.context.repo.repo = 'spring-security'
+
+    core.getInput.mockImplementation(name => name === 'token' ? 'test-token' : '')
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ _embedded: { generations: GENERATIONS } }),
+    })
+  })
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true })
+    delete process.env.GITHUB_WORKSPACE
+    jest.clearAllMocks()
+  })
+
+  it('renders "milestone: <number> # <branch>" when a matching milestone exists', async () => {
+    github.getOctokit.mockReturnValue(makeMockOctokit([
+      { title: '6.5.x', number: 10 },
+      { title: '7.0.x', number: 11 },
+    ]))
+
+    await run()
+
+    const output = fs.readFileSync(path.join(tmpDir, '.github', 'dependabot.yml'), 'utf8')
+    expect(output).toContain('milestone: 10 # 6.5.x')
+    expect(output).toContain('milestone: 11 # 7.0.x')
+    expect(core.setFailed).not.toHaveBeenCalled()
+  })
+
+  it('fails the action when used for a branch with no matching milestone', async () => {
+    // Only 6.5.x has a milestone; 7.0.x does not
+    github.getOctokit.mockReturnValue(makeMockOctokit([
+      { title: '6.5.x', number: 10 },
+    ]))
+
+    await run()
+
+    expect(core.setFailed).toHaveBeenCalledWith(
+      expect.stringContaining("branch '7.0.x'")
+    )
+    expect(fs.existsSync(path.join(tmpDir, '.github', 'dependabot.yml'))).toBe(false)
   })
 })
