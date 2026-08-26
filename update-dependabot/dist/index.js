@@ -30720,6 +30720,7 @@ const PARTIALS = {
   directory: 'directory: /\n',
   schedule: 'schedule:\n  interval: weekly\n',
   labels: "labels:\n  - 'in: build'\n  - 'type: dependency-upgrade'\n",
+  milestone: 'milestone: {{requiredMilestone}} # {{branch}}\n',
 }
 
 async function run() {
@@ -30753,31 +30754,26 @@ async function run() {
     core.info(`Fetched ${milestones.length} open milestones`)
 
     // Build feature-branches context; milestone is only set when a matching one is found
-    const featureBranchEntries = featureBranchNames.map(name => {
-      const entry = { branch: name }
-      const num = findMilestoneNumber(milestones, name)
-      if (num !== undefined) entry.milestone = num
-      return entry
-    })
+    const featureBranchEntries = featureBranchNames.map(name =>
+      attachMilestone({ branch: name }, findMilestoneNumber(milestones, name))
+    )
 
     // Assemble context; main is OSS-only — omitting the key causes {{#main}}...{{/main}} to render nothing
     const context = {
       'feature-branches': featureBranchEntries,
-      'docs-build': { branch: 'docs-build' },
+      'docs-build': attachMilestone({ branch: 'docs-build' }, findMilestoneNumber(milestones, 'docs-build')),
     }
 
     if (projectType === 'oss') {
-      const mainEntry = { branch: 'main' }
       const mainMilestone = await resolveMainMilestone(
         generations, featureBranchNames, milestones, workspace
       )
       if (mainMilestone !== undefined) {
-        mainEntry.milestone = mainMilestone
         core.info(`Main milestone: #${mainMilestone}`)
       } else {
         core.info('No main milestone found; omitting milestone property for main')
       }
-      context.main = mainEntry
+      context.main = attachMilestone({ branch: 'main' }, mainMilestone)
     }
 
     core.debug(`Mustache context:\n${JSON.stringify(context, null, 2)}`)
@@ -30844,6 +30840,24 @@ function findMilestoneNumber(milestones, name) {
   return m ? m.number : undefined
 }
 
+// Attaches the resolved milestone number (if any) plus a `requiredMilestone`
+// lambda for the {{>milestone}} partial. Mustache calls function-valued
+// context entries and uses the return value; throwing here propagates out of
+// Mustache.render (up through run()'s try/catch) instead of silently
+// omitting the line, unlike the existing {{#milestone}}/{{^milestone}} pattern.
+function attachMilestone(entry, num) {
+  if (num !== undefined) entry.milestone = num
+  entry.requiredMilestone = () => {
+    if (num === undefined) {
+      throw new Error(
+        `{{>milestone}} is used for branch '${entry.branch}', but no matching open milestone was found`
+      )
+    }
+    return num
+  }
+  return entry
+}
+
 // Sorts all generations descending by version and returns the name of the first
 // that is not already an active feature branch — this is the generation main tracks.
 function findMainGeneration(generations, featureBranchNames) {
@@ -30907,6 +30921,7 @@ module.exports = {
   isActiveGeneration,
   fetchMilestones,
   findMilestoneNumber,
+  attachMilestone,
   findMainGeneration,
   readProjectVersion,
   toVersionBranch,
