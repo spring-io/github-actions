@@ -17,6 +17,7 @@ on:
 
 jobs:
   analyze:
+    if: ${{ github.event.repository.visibility == 'public' }}
     name: Analyze
     runs-on: ubuntu-latest
     permissions:
